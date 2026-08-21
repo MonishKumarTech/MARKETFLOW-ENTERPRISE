@@ -287,7 +287,7 @@ function CalendarView() {
                     <span>{post.scheduled_at ? new Date(post.scheduled_at).toLocaleString() : 'Unscheduled'}</span>
                   </div>
                   <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded">
-                    {post.media_type.replace('_', ' ')}
+                    {post.media_type ? post.media_type.replace('_', ' ') : 'Image'}
                   </span>
                 </div>
               </div>

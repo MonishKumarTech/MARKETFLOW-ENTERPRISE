@@ -64,16 +64,18 @@ export interface CampaignRecord {
 
 export interface ContentPostRecord {
   id: string;
-  campaign_id?: string;
+  campaign_id?: string | null;
   platform: 'facebook' | 'instagram' | 'linkedin' | 'youtube';
   title: string;
   copy_body?: string;
-  media_type: 'single_image' | 'carousel' | 'video_reel' | 'article';
+  media_type?: 'single_image' | 'carousel' | 'video_reel' | 'article';
   status: 'draft' | 'pending_approval' | 'approved' | 'scheduled' | 'published' | 'rejected';
-  scheduled_at?: string;
+  scheduled_at?: string | null;
   author_id?: string | null;
   approved_by?: string | null;
-  custom_attributes: Record<string, any>;
+  custom_attributes?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
   deleted_at?: string | null;
 }
 
@@ -82,11 +84,13 @@ export interface TaskRecord {
   title: string;
   description?: string;
   assigned_to?: string | null;
-  related_campaign_id?: string;
-  related_post_id?: string;
+  related_campaign_id?: string | null;
+  related_post_id?: string | null;
   status: 'backlog' | 'in_progress' | 'in_review' | 'completed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  due_date?: string;
+  due_date?: string | null;
+  created_at?: string;
+  updated_at?: string;
   deleted_at?: string | null;
 }
 
@@ -345,7 +349,7 @@ class MarketFlowClient {
     }
   }
 
-  // --- Content Posts, Tasks & Leads ---
+  // --- Content Posts Operations ---
   async getContentPosts(): Promise<ContentPostRecord[]> {
     if (this.supabase) {
       try {
@@ -364,6 +368,42 @@ class MarketFlowClient {
     return raw ? JSON.parse(raw) : [];
   }
 
+  async createContentPost(record: Omit<ContentPostRecord, 'id'>): Promise<ContentPostRecord> {
+    const payload = {
+      ...record,
+      campaign_id: isValidUUID(record.campaign_id) ? record.campaign_id : null,
+      author_id: isValidUUID(record.author_id) ? record.author_id : null,
+      approved_by: isValidUUID(record.approved_by) ? record.approved_by : null,
+      custom_attributes: record.custom_attributes || {},
+    };
+
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase
+          .from('content_posts')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (!error && data) return data;
+      } catch (e) {
+        console.error('Supabase createContentPost exception:', e);
+      }
+    }
+
+    // Local storage fallback
+    const posts = await this.getContentPosts();
+    const newPost: ContentPostRecord = {
+      ...record,
+      id: `p0000000-0000-0000-0000-${Date.now().toString(16).padStart(12, '0')}`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    posts.unshift(newPost);
+    localStorage.setItem('mf_posts', JSON.stringify(posts));
+    return newPost;
+  }
+
   async updatePostStatus(postId: string, status: ContentPostRecord['status'], approvedBy?: string): Promise<void> {
     if (this.supabase && isValidUUID(postId)) {
       try {
@@ -371,7 +411,8 @@ class MarketFlowClient {
           .from('content_posts')
           .update({ 
             status, 
-            approved_by: isValidUUID(approvedBy) ? approvedBy : null 
+            approved_by: isValidUUID(approvedBy) ? approvedBy : null,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', postId);
       } catch (e) {
@@ -383,6 +424,7 @@ class MarketFlowClient {
     localStorage.setItem('mf_posts', JSON.stringify(updated));
   }
 
+  // --- Tasks Operations ---
   async getTasks(): Promise<TaskRecord[]> {
     if (this.supabase) {
       try {
@@ -401,6 +443,42 @@ class MarketFlowClient {
     return raw ? JSON.parse(raw) : [];
   }
 
+  async createTask(record: Omit<TaskRecord, 'id'>): Promise<TaskRecord> {
+    const payload = {
+      ...record,
+      assigned_to: isValidUUID(record.assigned_to) ? record.assigned_to : null,
+      related_campaign_id: isValidUUID(record.related_campaign_id) ? record.related_campaign_id : null,
+      related_post_id: isValidUUID(record.related_post_id) ? record.related_post_id : null,
+    };
+
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase
+          .from('task_queue')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (!error && data) return data;
+      } catch (e) {
+        console.error('Supabase createTask exception:', e);
+      }
+    }
+
+    // Local storage fallback
+    const tasks = await this.getTasks();
+    const newTask: TaskRecord = {
+      ...record,
+      id: `t0000000-0000-0000-0000-${Date.now().toString(16).padStart(12, '0')}`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    tasks.unshift(newTask);
+    localStorage.setItem('mf_tasks', JSON.stringify(tasks));
+    return newTask;
+  }
+
+  // --- Leads Operations ---
   async getLeads(): Promise<LeadRecord[]> {
     if (this.supabase) {
       try {
@@ -419,6 +497,7 @@ class MarketFlowClient {
     return raw ? JSON.parse(raw) : [];
   }
 
+  // --- Custom Fields Engine ---
   async getCustomFields(entityType?: string): Promise<CustomFieldDefinition[]> {
     if (this.supabase) {
       try {
@@ -455,6 +534,7 @@ class MarketFlowClient {
     return created;
   }
 
+  // --- Notifications Operations ---
   async getNotifications(): Promise<NotificationItem[]> {
     if (this.supabase) {
       try {
@@ -504,6 +584,7 @@ class MarketFlowClient {
     }
   }
 
+  // --- Calculations & Formulas ---
   calculateAttributionMetrics(campaigns: CampaignRecord[], leads: LeadRecord[]) {
     const activeCamps = campaigns.filter(c => !c.deleted_at);
     const activeLeads = leads.filter(l => !l.deleted_at);

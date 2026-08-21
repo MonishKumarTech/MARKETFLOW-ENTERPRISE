@@ -16,7 +16,8 @@ import {
   PieChart, 
   ArrowUpRight, 
   Clock, 
-  AlertCircle 
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 export const Route = createRoute({
@@ -30,7 +31,7 @@ function DashboardOverview() {
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [posts, setPosts] = useState<ContentPostRecord[]>([]);
-  const [, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     loadDashboardData();
@@ -44,9 +45,9 @@ function DashboardOverview() {
         marketFlowClient.getLeads(),
         marketFlowClient.getContentPosts(),
       ]);
-      setCampaigns(fetchedCampaigns);
-      setLeads(fetchedLeads);
-      setPosts(fetchedPosts);
+      setCampaigns(fetchedCampaigns || []);
+      setLeads(fetchedLeads || []);
+      setPosts(fetchedPosts || []);
     } catch (e) {
       console.error('Error fetching dashboard telemetry:', e);
     } finally {
@@ -86,13 +87,13 @@ function DashboardOverview() {
   const pendingApprovalsCount = posts.filter(p => p.status === 'pending_approval' && !p.deleted_at).length;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8">
       {/* 1. Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 p-6 rounded-3xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 p-4 sm:p-6 rounded-2xl sm:rounded-3xl">
         <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-emerald-500 animate-ping" />
+            <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight">
               Enterprise Command Dashboard
             </h1>
           </div>
@@ -101,27 +102,29 @@ function DashboardOverview() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {pendingApprovalsCount > 0 && canView('content_calendar') && (
             <Link
               to={'/calendar' as any}
-              className="inline-flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs font-bold transition"
+              className="inline-flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition"
             >
-              <AlertCircle className="h-4 w-4" />
-              <span>{pendingApprovalsCount} Pending Post Approvals</span>
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span>{pendingApprovalsCount} Approvals</span>
             </Link>
           )}
           <button
             onClick={loadDashboardData}
-            className="inline-flex items-center gap-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition"
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-60"
           >
-            Refresh Telemetry
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* 2. Top KPI Telemetry Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      {/* 2. Top KPI Telemetry Grid (Even 2-col on mobile, 4-col on desktop) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         <TelemetryCard
           title="Total Ad Spend"
           value={metrics.totalSpend}
@@ -135,7 +138,7 @@ function DashboardOverview() {
         <TelemetryCard
           title="Blended CPL"
           value={metrics.blendedCPL}
-          subtitle={`${metrics.totalLeadsCount} qualified leads captured`}
+          subtitle={`${metrics.totalLeadsCount} qualified leads`}
           change={-12.4}
           changeLabel="improvement vs last week"
           icon={Target}
@@ -145,7 +148,7 @@ function DashboardOverview() {
         <TelemetryCard
           title="Won Deal Pipeline"
           value={metrics.totalPipelineRevenue}
-          subtitle={`${metrics.totalConversions} closed customer contracts`}
+          subtitle={`${metrics.totalConversions} closed contracts`}
           change={+18.5}
           changeLabel="YoY revenue growth"
           icon={TrendingUp}
@@ -164,118 +167,130 @@ function DashboardOverview() {
       </div>
 
       {/* 3. Operational Overview & Channel Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Channel Attribution Matrix (2 Cols) */}
-        <div className="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 sm:pb-4">
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">Paid Media & Attribution Matrix</h2>
-              <p className="text-xs text-slate-400">Aggregated channel performance, spend allocation and realized ROAS</p>
+              <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">Paid Media & Attribution Matrix</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400">Aggregated channel performance, spend allocation and realized ROAS</p>
             </div>
             {canView('campaigns') && (
               <Link
                 to={'/campaigns' as any}
-                className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 shrink-0 ml-2"
               >
-                View All Campaigns <ArrowUpRight className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">View All</span> <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
             )}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="w-full text-left text-xs min-w-[500px]">
               <thead className="bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-4">Channel / Platform</th>
-                  <th className="py-3 px-3 text-right">Spend</th>
-                  <th className="py-3 px-3 text-right">Leads</th>
-                  <th className="py-3 px-3 text-right">CPL</th>
-                  <th className="py-3 px-3 text-right">Won Revenue</th>
-                  <th className="py-3 px-4 text-right">ROAS</th>
+                  <th className="py-2.5 sm:py-3 px-3 sm:px-4">Platform</th>
+                  <th className="py-2.5 sm:py-3 px-2.5 text-right">Spend</th>
+                  <th className="py-2.5 sm:py-3 px-2.5 text-right">Leads</th>
+                  <th className="py-2.5 sm:py-3 px-2.5 text-right">CPL</th>
+                  <th className="py-2.5 sm:py-3 px-2.5 text-right">Won Rev</th>
+                  <th className="py-2.5 sm:py-3 px-3 text-right">ROAS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {channelBreakdown.map((item) => (
-                  <tr key={item.channel} className="hover:bg-slate-800/30 transition">
-                    <td className="py-3.5 px-4">
-                      <span className="font-bold text-slate-200 capitalize">{item.channel}</span>
-                      <span className="text-[10px] text-slate-400 block">{item.campaignsCount} active campaigns</span>
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-semibold text-slate-200">
-                      ${item.spend.toLocaleString()}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-medium text-slate-300">
-                      {item.leadsCount}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-semibold text-emerald-400">
-                      ${item.cpl}
-                    </td>
-                    <td className="py-3.5 px-3 text-right font-medium text-slate-200">
-                      ${item.revenue.toLocaleString()}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <span className="inline-block px-2 py-0.5 rounded-md font-bold text-[11px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                        {item.roas}x
-                      </span>
+                {channelBreakdown.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-6 text-slate-500 text-xs">
+                      No active channel telemetry data recorded.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  channelBreakdown.map((item) => (
+                    <tr key={item.channel} className="hover:bg-slate-800/30 transition">
+                      <td className="py-3 px-3 sm:px-4">
+                        <span className="font-bold text-slate-200 capitalize block">{item.channel}</span>
+                        <span className="text-[10px] text-slate-400 block">{item.campaignsCount} campaigns</span>
+                      </td>
+                      <td className="py-3 px-2.5 text-right font-semibold text-slate-200">
+                        ${item.spend.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2.5 text-right font-medium text-slate-300">
+                        {item.leadsCount}
+                      </td>
+                      <td className="py-3 px-2.5 text-right font-semibold text-emerald-400">
+                        ${item.cpl}
+                      </td>
+                      <td className="py-3 px-2.5 text-right font-medium text-slate-200">
+                        ${item.revenue.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className="inline-block px-2 py-0.5 rounded-md font-bold text-[11px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          {item.roas}x
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
         {/* Content Pipeline & Quick Queue (1 Col) */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-5 flex flex-col justify-between">
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 sm:pb-4">
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight">Content Pipeline</h2>
-                <p className="text-xs text-slate-400">Upcoming social assets & approval state</p>
+                <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">Content Pipeline</h2>
+                <p className="text-[11px] sm:text-xs text-slate-400">Upcoming assets & approval state</p>
               </div>
               {canView('content_calendar') && (
                 <Link
                   to={'/calendar' as any}
-                  className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 shrink-0 ml-2"
                 >
-                  Open Calendar <ArrowUpRight className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Calendar</span> <ArrowUpRight className="h-3.5 w-3.5" />
                 </Link>
               )}
             </div>
 
-            <div className="mt-4 space-y-3">
-              {posts.slice(0, 3).map((post) => (
-                <div
-                  key={post.id}
-                  className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 tracking-wider">
-                      {post.platform}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                        post.status === 'scheduled'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : post.status === 'pending_approval'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          : 'bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {post.status.replace('_', ' ')}
-                    </span>
+            <div className="mt-3 sm:mt-4 space-y-2.5 sm:space-y-3">
+              {posts.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6">No scheduled content posts.</p>
+              ) : (
+                posts.slice(0, 3).map((post) => (
+                  <div
+                    key={post.id}
+                    className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition space-y-1.5 sm:space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] sm:text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 tracking-wider">
+                        {post.platform}
+                      </span>
+                      <span
+                        className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          post.status === 'scheduled'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : post.status === 'pending_approval'
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {post.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-200 line-clamp-1">{post.title}</p>
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : 'Unscheduled Draft'}
+                    </p>
                   </div>
-                  <p className="text-xs font-semibold text-slate-200 line-clamp-1">{post.title}</p>
-                  <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : 'Unscheduled Draft'}
-                  </p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-800/80">
+          <div className="pt-3 sm:pt-4 border-t border-slate-800/80">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>Dynamic RBAC Security:</span>
               <span className="font-semibold text-indigo-400 capitalize">{role.replace('_', ' ')} Node</span>
